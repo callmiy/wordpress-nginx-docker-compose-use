@@ -1,0 +1,98 @@
+services:
+  ng:
+    image: "nginx:1.23.1"
+    ports:
+      - "${DOCKER_HOST_NGINX_HTTP_PORT:-63980}:80"
+      - "${DOCKER_HOST_NGINX_TLS_PORT:-63981}:443"
+    volumes:
+      - "./nginx/:/etc/nginx/templates/"
+      - "./src:/var/www/html:rw,cached"
+      - "./certs:/etc/certs"
+    environment:
+      - "NGINX_ENVSUBST_TEMPLATE_SUFFIX=.conf"
+      - "DOMAIN=${DOMAIN}"
+    depends_on:
+      - "app"
+    # restart: always
+    env_file: "${DOCKER_ENV_FILE:-.env}"
+    networks:
+      project-name-dev:
+        aliases:
+          - "${DOMAIN}"
+
+  mysql:
+    image: "mariadb:10.8.3-jammy"
+    command: "--lower_case_table_names=2"
+    volumes:
+      - "./docker/data:/var/lib/mysql:delegated"
+    environment:
+      - "MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}"
+      - "MYSQL_DATABASE=${DB_NAME}"
+    # restart: always
+    ports:
+      - "${DOCKER_HOST_DB_PORT:-63982}:3306"
+    env_file: "${DOCKER_ENV_FILE:-.env}"
+    networks:
+      project-name-dev:
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: "${DOCKER_IMAGE_NAME:-project-name-app:0.0.0}"
+    volumes:
+      - "./src:/var/www/html:rw,cached"
+      - "./config/php.ini:/usr/local/etc/php/conf.d/php.ini"
+      - "./config/mailhog.ini:/usr/local/etc/php/conf.d/mailhog.ini"
+      # Note that we are writing only the mkcert CA root as the openssl trusted
+      # certificates. This works for now. In case openssl needs certificates
+      # from other authorities, we should download from
+      # https://curl.haxx.se/ca/cacert.pem and then append mkcert CA cert to
+      # the cacert.pem file and place in /usr/lib/ssl/cert.pem
+      - "./_certs/mkcert-ca-root.pem:/usr/lib/ssl/cert.pem"
+      - "./certs/${DOMAIN}.pem:/usr/local/share/ca-certificates/${DOMAIN}.crt"
+    depends_on:
+      - mysql
+    # restart: always
+    env_file: "${DOCKER_ENV_FILE:-.env}"
+    user: "${UUID:-1000}:${GID:-1000}"
+    networks:
+      project-name-dev:
+
+  p-admin:
+    image: "phpmyadmin:5.2.0-apache"
+    volumes:
+      - "./config/phpmyadmin.ini:/usr/local/etc/php/conf.d/phpmyadmin.ini"
+    environment:
+      PMA_HOST: "${DB_HOST}"
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+    ports:
+      - "${DOCKER_HOST_PHP_ADMIN_PORT:-63983}:80"
+    env_file: "${DOCKER_ENV_FILE:-.env}"
+    networks:
+      project-name-dev:
+
+  mail:
+    image: "mailhog/mailhog:v1.0.1"
+    ports:
+      - "${DOCKER_HOST_MAIL_PORT:-63984}:8025"
+      - "1025:1025"
+    env_file: "${DOCKER_ENV_FILE:-.env}"
+    networks:
+      project-name-dev:
+
+  c:
+    image: "composer:2.3.10"
+    working_dir: "/var/www/html"
+    restart: "no"
+    user: "${UUID:-1000}:${GID:-1000}"
+    volumes:
+      - "./src:/var/www/html:rw,cached"
+    env_file: "${DOCKER_ENV_FILE:-.env}"
+    networks:
+      project-name-dev:
+
+networks:
+  project-name-dev:
+    name: "project-name-dev"
