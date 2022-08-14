@@ -37,15 +37,14 @@
     "roots/wordpress": "^6.0.0",
     "roots/wp-config": "1.0.0",
     "roots/wp-password-bcrypt": "1.0.0",
-    "wpackagist-theme/twentytwentyone": "^1.6"
-    // "wpackagist-theme/twentytwentytwo": "^1.2"
-    // "wpackagist-plugin/advanced-custom-fields": "^5.12",
-    // "wpackagist-plugin/wp-graphql": "^1.8",
-    // "wp-graphql/wp-graphql-acf": "^0.5.3"
+    "wpackagist-theme/twentytwentyone": "^1.6",
+    "wpackagist-plugin/elementor": "^3.7",
+    "wpackagist-theme/twentytwentytwo": "^1.2"
   },
   "require-dev": {
     "squizlabs/php_codesniffer": "^3.5.6",
-    "roave/security-advisories": "dev-master"
+    "roave/security-advisories": "dev-master",
+    "friendsofphp/php-cs-fixer": "^3.9"
   },
   "config": {
     "optimize-autoloader": true,

@@ -3,6 +3,10 @@
 
 set -e
 
+components_roots='./src/components'
+word_press_components_root='/var/www/html/web/app'
+copy_watch_cmd='bash run.sh app.cp'
+
 function _env {
   local env
   local splitted_envs=""
@@ -75,6 +79,10 @@ function _has_internet {
   printf 1
 }
 
+function _cert_folder {
+  printf '%s' "${SITE_CERT_FOLDER:-./certs}"
+}
+
 function cert {
   : "Generate certificate for use with HTTPS"
 
@@ -85,8 +93,11 @@ function cert {
   local path
   path="$(_timestamp)"
 
+  local cert_folder
+  cert_folder="$(_cert_folder)"
+
   mkdir -p "$path"
-  rm -rf certs && mkdir -p certs
+  rm -rf "${cert_folder}" && mkdir -p "${cert_folder}"
 
   cd "$path"
 
@@ -94,7 +105,7 @@ function cert {
 
   cd -
 
-  find "./$path" -type f -name "*.pem" -exec mv {} certs \;
+  find "./$path" -type f -name "*.pem" -exec mv {} "${cert_folder}" \;
   rm -rf "./$path"
 
   local host_entry="127.0.0.1 $DOMAIN"
@@ -115,7 +126,7 @@ function dev {
 
   clear
 
-  if ! compgen -G "./certs/*.pem" >/dev/null; then
+  if ! compgen -G "${cert_folder}/*.pem" >/dev/null; then
     # shellcheck disable=2145
     _wait_until "cert $@"
   fi
@@ -141,7 +152,7 @@ function clean {
 
   sudo chown -R "$USER:$USER" .
 
-  rm -rf ./*certs
+  rm -rf ./*certs "$(_cert_folder)"
 
   rm -rf \
     src/vendor/ \
@@ -166,36 +177,111 @@ function clean {
   rm -rf ./docker/
 }
 
-function cp {
+function app.cpwk {
+  : "Stop watching copy."
+
+  local pid
+  pid="$(ps a | grep "${copy_watch_cmd}" | grep -v grep | awk '{print $1}')"
+
+  if [[ -n "$pid" ]]; then
+    local cmd="kill -9 ${pid}"
+    printf '%s\n\n' "${cmd}"
+    eval "${cmd}"
+  fi
+}
+
+function app.rm {
+  : "Delete a wordpress component."
+  local component_type="$1"
+  local component_name="$2"
+
+  if [[ -z "$component_type" ]] || [[ -z "$component_name" ]]; then
+    printf '\nERROR: You must specify component type and component name.\n\n'
+    exit 1
+  fi
+
+  app.cpwk
+
+  # shellcheck disable=2115
+  rm -rf "${components_roots}/${component_type}/${component_name}"
+
+  docker compose \
+    exec app \
+    rm -rf "${word_press_components_root}/$component_type/${component_name}"
+}
+
+function app.m {
+  : "Make a wordpress component. Examples:"
+  : "  run.sh component themes theme-name"
+
+  local component_type="$1"
+
+  if [[ "$component_type" != "themes" ]] && [[ "$component_type" != "plugins" ]]; then
+    printf '\nERROR: "%s" must be "themes" or "plugins"\n\n' "$component_type"
+    exit 1
+  fi
+
+  local component_name="$2"
+
+  local component_root="${components_roots}/${component_type}/${component_name}"
+
+  mkdir -p "${component_root}"
+
+  if [[ "$component_type" == 'themes' ]]; then
+    for theme_file in 'style.css' 'index.php'; do
+      local theme_file_abs="${component_root}/${theme_file}"
+
+      if [[ ! -e "$theme_file_abs" ]]; then
+        touch "$theme_file_abs"
+      fi
+    done
+  elif [[ ! -e "${component_root}/index.php" ]]; then
+    touch "${component_root}/index.php"
+    touch "${component_root}/${component_name}.php"
+  fi
+
+  printf '%s\n\n' "$component_root"
+}
+
+function app.cp {
   : "Copy from our app codes to appropriate wordpress folders"
 
-  local our_components_root="./src/app"
-
-  if [[ ! -e "${our_components_root}" ]]; then
+  if [[ ! -e "${components_roots}" ]]; then
     printf '\nERROR: You have not created any custom wordpress component. Exiting!\n\n'
     exit 1
   fi
 
   clear
 
-  local word_press_components_root="/var/www/html/web/app"
-
   # shellcheck disable=2045
-  for component in $(ls "${our_components_root}"); do
-    local word_press_component_path="${word_press_components_root}/$component"
-    local app_component_root="${our_components_root}/${component}"
+  for component_type in $(ls "${components_roots}"); do
+    local word_press_component_path="${word_press_components_root}/$component_type"
+    local component_root="${components_roots}/${component_type}"
 
     # shellcheck disable=2045
-    for app_path in $(ls "$app_component_root"); do
-      local app_component_full_path="${app_component_root}/${app_path}"
+    for filename in $(ls "$component_root"); do
+      local component_file_full_path="${component_root}/${filename}"
 
-      local cmd="docker cp ${app_component_full_path} th-app:${word_press_component_path}"
+      local cmd="docker cp \
+        ${component_file_full_path} \
+        ${CONTAINER_NAME:my-site-app}:${word_press_component_path}"
 
       printf 'Executing:\n\t %s\n\n' "${cmd}"
       eval "${cmd}"
     done
   done
 
+}
+
+function app.cpw {
+  : "Copy from our app codes to appropriate wordpress folders in watch mode."
+
+  chokidar \
+    "${components_roots}" \
+    --initial \
+    -c "${copy_watch_cmd}" &
+
+  disown
 }
 
 function help {

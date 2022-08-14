@@ -7,7 +7,7 @@ services:
     volumes:
       - "./nginx/:/etc/nginx/templates/"
       - "./src:/var/www/html:rw,cached"
-      - "./certs:/etc/certs"
+      - "${SITE_CERT_FOLDER:-./certs}:/etc/certs:ro"
     environment:
       - "NGINX_ENVSUBST_TEMPLATE_SUFFIX=.conf"
       - "DOMAIN=${DOMAIN}"
@@ -16,7 +16,7 @@ services:
     # restart: always
     env_file: "${DOCKER_ENV_FILE:-.env}"
     networks:
-      project-name-dev:
+      my-site-dev:
         aliases:
           - "${DOMAIN}"
 
@@ -33,13 +33,14 @@ services:
       - "${DOCKER_HOST_DB_PORT:-63982}:3306"
     env_file: "${DOCKER_ENV_FILE:-.env}"
     networks:
-      project-name-dev:
+      my-site-dev:
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: "${DOCKER_IMAGE_NAME:-project-name-app:0.0.0}"
+    image: "${DOCKER_IMAGE_NAME:-my-site-app:0.0.0}"
+    container_name: "${CONTAINER_NAME:-my-site-app}"
     volumes:
       - "./src:/var/www/html:rw,cached"
       - "./config/php.ini:/usr/local/etc/php/conf.d/php.ini"
@@ -49,15 +50,17 @@ services:
       # from other authorities, we should download from
       # https://curl.haxx.se/ca/cacert.pem and then append mkcert CA cert to
       # the cacert.pem file and place in /usr/lib/ssl/cert.pem
-      - "./_certs/mkcert-ca-root.pem:/usr/lib/ssl/cert.pem"
-      - "./certs/${DOMAIN}.pem:/usr/local/share/ca-certificates/${DOMAIN}.crt"
+      - "${CA_ROOT:-./_certs/mkcert-ca-root.pem}:/usr/lib/ssl/cert.pem:ro"
+      # - "./certs/${DOMAIN}.pem:/usr/local/share/ca-certificates/${DOMAIN}.crt"
+    ports:
+      - "${DOCKER_HOST_APP_PORT:-63985}:9000"
     depends_on:
       - mysql
     # restart: always
     env_file: "${DOCKER_ENV_FILE:-.env}"
     user: "${UUID:-1000}:${GID:-1000}"
     networks:
-      project-name-dev:
+      my-site-dev:
 
   p-admin:
     image: "phpmyadmin:5.2.0-apache"
@@ -71,7 +74,7 @@ services:
       - "${DOCKER_HOST_PHP_ADMIN_PORT:-63983}:80"
     env_file: "${DOCKER_ENV_FILE:-.env}"
     networks:
-      project-name-dev:
+      my-site-dev:
 
   mail:
     image: "mailhog/mailhog:v1.0.1"
@@ -80,7 +83,7 @@ services:
       - "1025:1025"
     env_file: "${DOCKER_ENV_FILE:-.env}"
     networks:
-      project-name-dev:
+      my-site-dev:
 
   c:
     image: "composer:2.3.10"
@@ -91,8 +94,8 @@ services:
       - "./src:/var/www/html:rw,cached"
     env_file: "${DOCKER_ENV_FILE:-.env}"
     networks:
-      project-name-dev:
+      my-site-dev:
 
 networks:
-  project-name-dev:
-    name: "project-name-dev"
+  my-site-dev:
+    name: "my-site-dev"
