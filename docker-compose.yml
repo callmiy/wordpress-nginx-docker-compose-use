@@ -58,7 +58,7 @@ services:
       - mysql
     # restart: always
     env_file: "${DOCKER_ENV_FILE:-.env}"
-    user: "${UUID:-1000}:${GID:-1000}"
+    user: "1000"
     networks:
       my-site-dev:
 
