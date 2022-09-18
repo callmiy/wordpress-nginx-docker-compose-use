@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=1090
+# shellcheck disable=1090,2009
 
 set -e
 
@@ -291,6 +291,57 @@ function help {
   done
 
   printf "\n"
+}
+
+function tunnel-pid {
+  : "Get the pid of the tunnel"
+
+  local pid
+
+  pid="$(ps a | grep -P "${CLOUDFLARE_TUNNEL_CONFIG_FILE}" | grep -v grep | awk '{print $1}')"
+
+  printf '%s' "${pid}"
+}
+
+function kill-tunnel {
+  : "Kill the local proxy tunnel"
+
+  local pid
+  pid="$(tunnel-pid)"
+
+  if [ -n "${pid}" ]; then
+    kill -KILL "${pid}"
+  fi
+
+  printf '%s' "${pid}"
+}
+
+function create-tunnel {
+  : ""
+  local config_file
+  local uuid
+
+  config_file="${CLOUDFLARE_TUNNEL_CONFIG_FILE:-.cloudflare-tunnel-config.yml}"
+
+  uuid=$(cloudflared tunnel create "$CLOUDFLARE_TUNNEL_NAME" |
+    grep -P "Created tunnel ${CLOUDFLARE_TUNNEL_NAME} with id" |
+    awk '{print $NF}')
+
+  cat <<EOF >"${config_file}"
+url: ${WP_HOME}
+tunnel: $CLOUDFLARE_TUNNEL_NAME
+credentials-file: ${HOME}/.cloudflared/${uuid}.json
+EOF
+
+  cloudflared tunnel route dns \
+    "${CLOUDFLARE_TUNNEL_NAME}" \
+    "${CLOUDFLARE_TUNNEL_NAME}.${CLOUDFLARE_TUNNEL_DOMAIN}"
+}
+
+function tunnel {
+  : ""
+  cloudflared tunnel --config "${CLOUDFLARE_TUNNEL_CONFIG_FILE}" run &
+  disown
 }
 
 TIMEFORMAT="Task completed in %3lR"
