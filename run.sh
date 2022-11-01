@@ -119,7 +119,7 @@ function cert {
   cat "$(mkcert -CAROOT)/rootCA.pem" >./_certs/mkcert-ca-root.pem
 }
 
-function dev {
+function d {
   : "Start docker compose services required for development"
 
   _raise_on_no_env_file "$@"
