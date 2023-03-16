@@ -55,18 +55,11 @@ function _timestamp {
 }
 
 function _raise_on_no_env_file {
-  if [[ -n "$DOCKER_ENV_FILE" ]]; then
-    if [[ "$DOCKER_ENV_FILE" =~ .env.example ]]; then
-      printf "\nERROR: env filename can not be .env.example.\n\n"
-      exit 1
-    fi
-
-    return 0
-  fi
-
-  if [[ -z "$1" ]] || [[ ! -e "$1" ]]; then
-    printf "\nERROR: env filename has not been provided or invalid.\n"
-    printf "You may also source your environment file.\n\n"
+  if [[ -z "$ENV_FILE" ]]; then
+    echo -e "\nERROR: env file not set.\n"
+    exit 1
+  elif [[ "$ENV_FILE" =~ .env.example ]]; then
+    echo -e "\nERROR: env filename can not be .env.example.\n"
     exit 1
   fi
 }
@@ -97,7 +90,8 @@ function cert {
   cert_folder="$(_cert_folder)"
 
   mkdir -p "$path"
-  rm -rf "${cert_folder}" && mkdir -p "${cert_folder}"
+  rm -rf "${cert_folder}"
+  mkdir -p "${cert_folder}"
 
   cd "$path"
 
@@ -105,18 +99,31 @@ function cert {
 
   cd -
 
-  find "./$path" -type f -name "*.pem" -exec mv {} "${cert_folder}" \;
+  find "./$path" \
+    -type f \
+    -name "*.pem" \
+    -exec mv {} "${cert_folder}" \;
+
   rm -rf "./$path"
 
   local host_entry="127.0.0.1 $DOMAIN"
 
   if [[ ! "$(cat /etc/hosts)" =~ $host_entry ]]; then
-    printf "%s\n" "$host_entry" | sudo tee -a /etc/hosts
+    printf "%s\n" "$host_entry" |
+      sudo tee -a /etc/hosts
   fi
 
   mkdir -p ./_certs
 
   cat "$(mkcert -CAROOT)/rootCA.pem" >./_certs/mkcert-ca-root.pem
+}
+
+function domain {
+  if command -v xclip; then
+    echo "$WP_HOME" | xclip -selection c
+  fi
+
+  echo -e "\n${WP_HOME}"
 }
 
 function d {
@@ -131,19 +138,16 @@ function d {
     _wait_until "cert $@"
   fi
 
-  _env "$1"
-
-  if [[ "$(_has_internet)" ]]; then
+  if _has_internet; then
     cd src
     composer install
-    cd -
+    cd - >/dev/null
   fi
 
   local services="mysql app ng p-admin mail"
 
-  # shellcheck disable=2086
-  docker compose up -d $services &&
-    docker compose logs -f $services
+  docker compose up -d $services
+  docker compose logs -f $services
 }
 
 function clean {
@@ -284,15 +288,6 @@ function app.cpw {
   disown
 }
 
-function help {
-  : "List available tasks."
-  compgen -A function | grep -v "^_" | while read -r name; do
-    paste <(printf '%s' "$name") <(type "$name" | sed -nEe 's/^[[:space:]]*: ?"(.*)";/    \1/p')
-  done
-
-  printf "\n"
-}
-
 function tunnel-pid {
   : "Get the pid of the tunnel"
 
@@ -344,5 +339,49 @@ function tunnel {
   disown
 }
 
-TIMEFORMAT="Task completed in %3lR"
+function help {
+  : "List available tasks."
+
+  mapfile -t names < <(compgen -A function | grep -v '^_')
+
+  local len=0
+  declare -A names_map=()
+
+  for name in "${names[@]}"; do
+    _len="${#name}"
+    names_map["$name"]="${_len}"
+    if [[ "${_len}" -gt "${len}" ]]; then len=${_len}; fi
+  done
+
+  len=$((len + 10))
+
+  for name in "${names[@]}"; do
+    local spaces=""
+    _len="${names_map[$name]}"
+    _len=$((len - _len))
+
+    for _ in $(seq "${_len}"); do
+      spaces="${spaces}-"
+      ((++t))
+    done
+
+    mapfile -t doc1 < <(
+      type "$name" |
+        sed -nEe "s/^[[:space:]]*: ?\"(.*)\";/\1/p"
+
+    )
+
+    if [[ -n "${doc1[*]}" ]]; then
+      for _doc in "${doc1[@]}"; do
+        echo -e "${name} ${spaces} ${_doc}"
+      done
+    else
+      echo "${name} ${spaces} *************"
+    fi
+
+    echo
+  done
+}
+
+TIMEFORMAT=$'\n\nTask completed in %3lR\n'
 time "${@:-help}"

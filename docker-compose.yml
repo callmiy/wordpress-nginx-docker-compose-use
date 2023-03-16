@@ -14,7 +14,7 @@ services:
     depends_on:
       - "app"
     # restart: always
-    env_file: "${DOCKER_ENV_FILE:-.env}"
+    env_file: "${ENV_FILE:-.env}"
     networks:
       my-site-dev:
         aliases:
@@ -31,7 +31,7 @@ services:
     # restart: always
     ports:
       - "${DOCKER_HOST_DB_PORT:-63982}:3306"
-    env_file: "${DOCKER_ENV_FILE:-.env}"
+    env_file: "${ENV_FILE:-.env}"
     networks:
       my-site-dev:
 
@@ -57,7 +57,7 @@ services:
     depends_on:
       - mysql
     # restart: always
-    env_file: "${DOCKER_ENV_FILE:-.env}"
+    env_file: "${ENV_FILE:-.env}"
     user: "1000"
     networks:
       my-site-dev:
@@ -72,7 +72,7 @@ services:
       MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
     ports:
       - "${DOCKER_HOST_PHP_ADMIN_PORT:-63983}:80"
-    env_file: "${DOCKER_ENV_FILE:-.env}"
+    env_file: "${ENV_FILE:-.env}"
     networks:
       my-site-dev:
 
@@ -81,7 +81,7 @@ services:
     ports:
       - "${DOCKER_HOST_MAIL_PORT:-63984}:8025"
       - "1025:1025"
-    env_file: "${DOCKER_ENV_FILE:-.env}"
+    env_file: "${ENV_FILE:-.env}"
     networks:
       my-site-dev:
 
@@ -92,7 +92,7 @@ services:
     user: "${UUID:-1000}:${GID:-1000}"
     volumes:
       - "./src:/var/www/html:rw,cached"
-    env_file: "${DOCKER_ENV_FILE:-.env}"
+    env_file: "${ENV_FILE:-.env}"
     networks:
       my-site-dev:
 
